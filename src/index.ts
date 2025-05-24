@@ -1,3 +1,5 @@
+import { getRaydiumPrice, getOrcaPrice } from "./dex";
+
 import { request } from "undici";
 import { BN } from "@coral-xyz/anchor";
 import {
@@ -113,6 +115,85 @@ const getRoute = async (
         console.log(
           `   Price Impact: ${quote1.priceImpactPct}% + ${quote2.priceImpactPct}%`
         );
+
+        // Testing ALL DEXs comparison
+        console.log(`   🔍 Testing Jupiter vs Individual DEXs...`);
+
+        // Test Raydium
+        const raydiumStep1 = await getRaydiumPrice(
+          connection,
+          mintAddr1,
+          mintAddr2,
+          amountIn
+        );
+        let raydiumProfit = null;
+        if (raydiumStep1) {
+          const raydiumStep2 = await getRaydiumPrice(
+            connection,
+            mintAddr2,
+            mintAddr1,
+            raydiumStep1
+          );
+          if (raydiumStep2) {
+            raydiumProfit = raydiumStep2 - amountIn;
+          }
+        }
+
+        // Test Orca
+        const orcaStep1 = await getOrcaPrice(
+          connection,
+          mintAddr1,
+          mintAddr2,
+          amountIn
+        );
+        let orcaProfit = null;
+        if (orcaStep1) {
+          const orcaStep2 = await getOrcaPrice(
+            connection,
+            mintAddr2,
+            mintAddr1,
+            orcaStep1
+          );
+          if (orcaStep2) {
+            orcaProfit = orcaStep2 - amountIn;
+          }
+        }
+
+        // Compare all results
+        const jupiterProfit = Number(quote2.outAmount) - amountIn;
+
+        console.log(`   📊 PROFIT COMPARISON:`);
+        console.log(`   🟡 Jupiter:  ${jupiterProfit.toLocaleString()}`);
+        console.log(
+          `   🔴 Raydium:  ${
+            raydiumProfit ? raydiumProfit.toLocaleString() : "Failed"
+          }`
+        );
+        console.log(
+          `   🔵 Orca:     ${
+            orcaProfit ? orcaProfit.toLocaleString() : "Failed"
+          }`
+        );
+
+        // Find the winner
+        const profits = [
+          { name: "Jupiter", profit: jupiterProfit },
+          { name: "Raydium", profit: raydiumProfit },
+          { name: "Orca", profit: orcaProfit },
+        ].filter((p) => p.profit !== null);
+
+        if (profits.length > 0) {
+          const winner = profits.reduce((best, current) =>
+            current.profit! > best.profit! ? current : best
+          );
+          console.log(
+            `   🏆 WINNER: ${
+              winner.name
+            } with ${winner.profit!.toLocaleString()} profit!`
+          );
+        } else {
+          console.log(`   ❌ All DEX checks failed!`);
+        }
 
         // IMPROVED PROFITABILITY CALCULATION with safety margins
         const estimatedGasCost = 15000; // ~0.000015 SOL gas fees for 2 transactions
@@ -536,6 +617,7 @@ const start = async () => {
   // ... your existing balance checking code ...
 
   const WSOL_MINT = "So11111111111111111111111111111111111111112";
+  const JUP_MINT = "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN";
 
   // REPLACE your stables array with these high-volatility, high-volume tokens:
   const stables = [
@@ -548,43 +630,14 @@ const start = async () => {
     "A8C3xuqscfmyLrte3VmTqrAq8kgMASius9AFNANwpump", // POPCAT - High volatility cat meme
 
     // JUPITER ECOSYSTEM (Benefits from platform growth)
-    "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", // JUP - Jupiter's own token
-
-    // AI SECTOR TOKENS (Trending with good spreads)
-    "CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump", // GOAT - AI agent token
-    "PCmxdvjEUaywfGCgQyXA1ppCwdHsM7z8hNDNbLhgGLfF", // ACT - AI sector play
+    // "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", // JUP - Jupiter's own token
 
     // STAKED SOL DERIVATIVES (Often have price discrepancies)
     "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So", // mSOL - Marinade staked SOL
     "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn", // jitoSOL - Jito staked SOL
 
     // HIGH VOLUME DEFI TOKENS
-    "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof", // RND - Render token
     "So11111111111111111111111111111111111111112", // SOL - Keep one stable reference
-
-    "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", // BONK
-    "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", // WIF
-    "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", // JUP
-    "A8C3xuqscfmyLrte3VmTqrAq8kgMASius9AFNANwpump", // POPCAT
-
-     "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", // BONK - Most liquid meme
-    "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", // JUP - Jupiter ecosystem
-    "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So", // mSOL - Staked SOL
-  ];
-
-  // PRIORITY ORDER (Start with these first - highest profit potential):
-  const highPriorityTokens = [
-    "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", // BONK
-    "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", // WIF
-    "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", // JUP
-    "A8C3xuqscfmyLrte3VmTqrAq8kgMASius9AFNANwpump", // POPCAT
-  ];
-
-  // CONSERVATIVE START (If you want to test with fewer tokens first):
-  const conservativeStart = [
-    "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", // BONK - Most liquid meme
-    "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", // JUP - Jupiter ecosystem
-    "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So", // mSOL - Staked SOL
   ];
 
   // Use any of these arrays instead of your current stables array
@@ -596,7 +649,8 @@ const start = async () => {
           `⏳ Checking ${stable.slice(0, 8)}... (respecting rate limits)`
         );
 
-        await getRoute(WSOL_MINT, stable, LAMPORTS_PER_SOL * 0.06);
+        // await getRoute(WSOL_MINT, stable, LAMPORTS_PER_SOL * 0.01);
+        await getRoute(JUP_MINT, stable, 15000000);
 
         // MUCH LONGER DELAY - Respect 1 request per second limit
         console.log("😴 Waiting 3 seconds to respect Jupiter's rate limits...");
